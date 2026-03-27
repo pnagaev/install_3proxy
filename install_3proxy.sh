@@ -49,7 +49,10 @@ err()  { echo -e "${RED}[ERR]${NC} $*"; }
 
 check_os() {
     msg "Проверка ОС..."
-    command -v apt-get >/dev/null 2>&1 || { err "Скрипт рассчитан на Debian/Ubuntu"; exit 1; }
+    if ! command -v apt-get >/dev/null 2>&1; then
+        err "Скрипт рассчитан на Debian/Ubuntu"
+        exit 1
+    fi
     ok "apt найден"
 }
 
@@ -64,7 +67,7 @@ install_docker() {
     if command -v docker >/dev/null 2>&1; then
         ok "Docker уже установлен"
         systemctl enable --now docker >/dev/null 2>&1 || true
-        return
+        return 0
     fi
 
     msg "Установка Docker..."
@@ -91,8 +94,31 @@ EOF
 
 check_docker_compose() {
     msg "Проверка docker compose..."
-    docker compose version >/dev/null 2>&1 || { err "docker compose недоступен"; exit 1; }
+    if ! docker compose version >/dev/null 2>&1; then
+        err "docker compose недоступен"
+        exit 1
+    fi
     ok "docker compose доступен"
+}
+
+cleanup_existing_container() {
+    msg "Проверка существующего контейнера ${CONTAINER_NAME}..."
+
+    if docker ps -a --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
+        warn "Контейнер ${CONTAINER_NAME} уже существует. Удаляю и пересоздаю..."
+
+        if docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
+            msg "Останавливаю работающий контейнер ${CONTAINER_NAME}..."
+            docker stop "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+            ok "Контейнер остановлен"
+        fi
+
+        msg "Удаляю контейнер ${CONTAINER_NAME}..."
+        docker rm -f "${CONTAINER_NAME}" >/dev/null 2>&1 || true
+        ok "Старый контейнер удалён"
+    else
+        ok "Старый контейнер не найден"
+    fi
 }
 
 generate_password_if_needed() {
@@ -222,11 +248,11 @@ setup_ufw() {
 wait_container() {
     msg "Проверка запуска контейнера..."
     sleep 3
-    docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}" || {
+    if ! docker ps --format '{{.Names}}' | grep -qx "${CONTAINER_NAME}"; then
         err "Контейнер не запустился"
         docker logs "${CONTAINER_NAME}" || true
         exit 1
-    }
+    fi
     ok "Контейнер работает"
 }
 
@@ -255,8 +281,7 @@ show_info() {
     echo
     echo "Тест SOCKS5 proxy:"
     echo "curl --proxy socks5h://${PROXY_USER}:${PROXY_PASS}@${ip}:${SOCKS_PORT} https://ifconfig.me"
-    echo -e "\n Ответ должен быть IP вашего сервера с 3proxy."
-    
+    echo -e "\nОтвет должен быть IP вашего сервера с 3proxy."
 }
 
 main() {
@@ -265,6 +290,7 @@ main() {
     install_base
     install_docker
     check_docker_compose
+    cleanup_existing_container
     generate_password_if_needed
     prepare_password_hash
     check_ports
