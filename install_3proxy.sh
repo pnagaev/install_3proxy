@@ -13,6 +13,7 @@ PROXY_USER="myuser"
 # Если пусто — пароль будет сгенерирован автоматически
 PROXY_PASS=""
 #############################
+HTTP_PORT_HEX=$(printf '%04X' "${HTTP_PORT}")
 
 echo "⚠️  ВНИМАНИЕ!"
 echo "- После установки УДАЛИТЕ строку PROXY_PASS из скрипта"
@@ -214,7 +215,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "HEX_PORT=\$(printf '%04X' ${HTTP_PORT}); grep -qi \":\$HEX_PORT\" /proc/net/tcp /proc/net/tcp6"
+          "grep -qi ':${HTTP_PORT_HEX}' /proc/net/tcp /proc/net/tcp6"
         ]
       interval: 15s
       timeout: 3s
@@ -223,6 +224,7 @@ services:
 EOF
     ok "docker-compose.yml создан"
 }
+
 
 pull_image() {
     msg "Загрузка образа ${IMAGE_NAME}..."
@@ -273,7 +275,7 @@ show_info() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo
     echo "Важно:"
-    echo "- Удали строку PROXY_PASS из скрипта после установки"
+    echo "- Удали строку PROXY_PASS из скрипта после установки, если пароль указывали вручную"
     echo "- В конфиге 3proxy пароль уже сохранён в виде хэша"
     echo
     echo "Тест HTTP proxy:"
